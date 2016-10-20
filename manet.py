@@ -28,6 +28,8 @@ def eucliDistsSq(array1, array2):
 
 def vectorsTi(array1, array2, func=gaussian, *argv, **argk):
     '''
+    input: array1, array2, func=gaussian, *argv, **argk
+    output T1, T2 (arrays of Tis)
     array1 and array2 are the arrays with the data to compare
     they are 2D numpy array where each row is a candidate and
     contains the PS variables eg [m12, m23, m13]
@@ -57,11 +59,29 @@ def vectorsTi(array1, array2, func=gaussian, *argv, **argk):
 
 
 def EnergyTest(*argv, **argk):
+    '''
+    input: array1, array2, func=gaussian, *argv, **argk
+    output T (the energy test)
+    array1 and array2 are the arrays with the data to compare
+    they are 2D numpy array where each row is a candidate and
+    contains the PS variables eg [m12, m23, m13]
+    func is the distance function 
+    argv and argk are passed to func
+    '''
     T1, T2 = vectorsTi(*argv, **argk)
     return T1.sum() + T2.sum()
 
 
 def getTandMinMaxTi(*argv, **argk):
+    '''
+    input: array1, array2, func=gaussian, *argv, **argk
+    output T, T1, T2 (the energy test and the two vectors of Tis)
+    array1 and array2 are the arrays with the data to compare
+    they are 2D numpy array where each row is a candidate and
+    contains the PS variables eg [m12, m23, m13]
+    func is the distance function 
+    argv and argk are passed to func
+    '''
     T1, T2 = vectorsTi(*argv, **argk)
     return (T1.sum() + T2.sum()), min(T1.min(), T2.min()), max(T1.max(), T2.max())
 
@@ -77,11 +97,19 @@ def permutation(array1, array2):
 
 
 def writeTis(array1, array2, T1, T2, outFile_name='Tis.txt'):
+    '''
+    Write files file with 
+    0/1 var1 var2 ... varN Ti
+    0/1 tells which samples it comes from,
+    var1.. varN are the phase-space variables and
+    Ti is the local Ti that should allow to visualize 
+    which region shows disagreement between the two samples
+    '''
     table1 = np.hstack((np.zeros((array1.shape[0],1)),array1,T1[:,None]))
     table2 = np.hstack((np.ones((array2.shape[0],1)),array2,T2[:,None]))
     tableTot = np.concatenate((table1, table2))
     fmt = ['%.0f']+['%.5e']*(array1.shape[1]+1)
-    np.savetxt('Tis.txt', tableTot, fmt = fmt)
+    np.savetxt(outFile_name, tableTot, fmt = fmt)
 
 
 class Manet:
@@ -154,6 +182,7 @@ if __name__ == '__main__':
     parser.add_argument('-p','--nperm',help='define number of permutations to run', default=0, type=int)
     parser.add_argument('-r','--seed',help='specify a seed for the random number generator', default=0, type=int)
     parser.add_argument('-d',help='skip the default T calculation (used when just adding permutations as a separate job)',action='store_true')
+    parser.add_argument('-o','--outfile',help='output file name, do not specify the estension as it will create a Tis.txt and a Ts.txt', default='')
     args = parser.parse_args()
     ##########################
 
@@ -172,7 +201,7 @@ if __name__ == '__main__':
     if not args.d:
         t0 = time.time()
         et=Manet(sample1, sample2, sigma=args.sigma)
-        et.writeTis()
+        et.writeTis('.'.join([args.outfile, 'Tis.txt']))
         print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(et.T, time.time()-t0)
 
     # Run permutations
@@ -186,7 +215,7 @@ if __name__ == '__main__':
         print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0)
       
     header = '' if args.d else '{0:.5e}'.format(et.T)
-    np.savetxt('Ts.txt', Ts, header=header, comments = '', fmt='%.5e')
+    np.savetxt('.'.join([args.outfile, 'Ts.txt']), Ts, header=header, comments = '', fmt='%.5e')
 
     
 
