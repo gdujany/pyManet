@@ -201,7 +201,8 @@ if __name__ == '__main__':
     if not args.d:
         t0 = time.time()
         et=Manet(sample1, sample2, sigma=args.sigma)
-        et.writeTis('.'.join([args.outfile, 'Tis.txt']))
+        outTis_name = args.outfile+'.Tis.txt' if args.outfile else 'Tis.txt'
+        et.writeTis(outTis_name)
         print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(et.T, time.time()-t0)
 
     # Run permutations
@@ -215,7 +216,8 @@ if __name__ == '__main__':
         print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0)
       
     header = '' if args.d else '{0:.5e}'.format(et.T)
-    np.savetxt('.'.join([args.outfile, 'Ts.txt']), Ts, header=header, comments = '', fmt='%.5e')
+    outTs_name = args.outfile+'.Ts.txt' if args.outfile else 'Ts.txt'
+    np.savetxt(outTs_name, Ts, header=header, comments = '', fmt='%.5e')
 
     
 
