@@ -26,7 +26,25 @@ def eucliDistsSq(array1, array2):
     return ((array1[:,None]-array2)**2).sum(axis=2)
 
 
-def vectorsTi(array1, array2, func=gaussian, *argv, **argk):
+def getPsi(array1, array2, func=gaussian, *argv, **argk):
+    '''
+    input: array1, array2, func=gaussian, *argv, **argk
+    output: Big matrix with all the psi_ij distances with the func already applied
+    for both the particles with particles, antiparticles with antiparticles and cross
+    terms on the off-diagonals matrices, the diagonal is zero
+    |             |             |
+    | psi n1 x n1 | psi n1 x n2 |  
+    |             |             |
+    |-------------|-------------|
+    | psi n2 x n1 | psi n2 x n2 |  
+    |             |             |
+    '''
+    arrayTot = np.concatenate([array1, array2])
+    Psi = func(eucliDistsSq(arrayTot, arrayTot), *argv, **argk)
+    np.fill_diagonal(Psi, 0)
+    return Psi
+
+def vectorsTi_fromArrays(array1, array2, func=gaussian, *argv, **argk):
     '''
     input: array1, array2, func=gaussian, *argv, **argk
     output T1, T2 (arrays of Tis)
@@ -36,16 +54,19 @@ def vectorsTi(array1, array2, func=gaussian, *argv, **argk):
     func is the distance function 
     argv and argk are passed to func
     '''
-    
     Ti1, Ti2 = 0, 0
     n1 = array1.shape[0]
     n2 = array2.shape[0]
 
     # The first two sums
+    time0 = time.time()
     matrDists = func(eucliDistsSq(array1, array1), *argv, **argk)
+    time1 = time.time()
     np.fill_diagonal(matrDists, 0) 
     Ti1 = matrDists.sum(1)/(2*n1*(n1-1))
-    
+    time2 = time.time()
+    print time1-time0, time2-time1
+
     matrDists = func(eucliDistsSq(array2, array2), *argv, **argk)
     np.fill_diagonal(matrDists, 0) 
     Ti2 = matrDists.sum(1)/(2*n2*(n2-1)) 
@@ -54,6 +75,58 @@ def vectorsTi(array1, array2, func=gaussian, *argv, **argk):
     matrDists = func(eucliDistsSq(array1, array2), *argv, **argk)
     Ti1 -= matrDists.sum(1)/(2*n1*n2)
     Ti2 -= matrDists.sum(0)/(2*n1*n2)
+    
+    return Ti1, Ti2
+
+def vectorsTi_fromPsi(Psi, tau1):
+    '''
+    input: Psi, tau1
+    output T1, T2 (arrays of Tis)
+    Psi is the matrix with already the function of the distances squares 
+    computed and vector with 1 for element of the first sample and 0 for the second one
+    See docstring of getPsi for more information.
+    This should be faster for permutations.
+    '''
+    Ti1, Ti2 = 0, 0
+    n1 = tau1.sum()
+    n2 = len(tau1)-n1
+    
+    # Vectors identities
+    # tau1 = np.concatenate([np.ones(n1), np.zeros(n2)])
+    tau2 = 1-tau1
+    
+    # Compute Tis
+    Ti1 = np.tensordot((tau1/(2*n1*(n1-1)) + tau2/(2*n1*n2)),Psi,1)
+    Ti2 = np.tensordot(Psi,(tau2/(2*n2*(n2-1)) + tau1/(2*n1*n2)),1)
+    
+    return Ti1, Ti2
+ 
+
+def vectorsTi(array1=None, array2=None, Psi=None, tau1=None, func=gaussian, *argv, **argk):
+    '''
+    input: array1, array2, func=gaussian, *argv, **argk
+    output T1, T2 (arrays of Tis)
+    array1 and array2 are the arrays with the data to compare
+    they are 2D numpy array where each row is a candidate and
+    contains the PS variables eg [m12, m23, m13]
+    func is the distance function 
+    argv and argk are passed to func
+
+    As an alternative instead of array1 and array2 one can pass
+    Psi and tau1 (matrix with already the function of the distances squares 
+    computed and vector with 1 for element of the first sample and 0 for the second one)
+    See docstring of getPsi for more information.
+    This should be faster for permutations.
+    '''
+
+    if array1 != None and array2 != None and Psi == None and tau1 == None:
+        Ti1, Ti2 = vectorsTi_fromArrays(array1=array1, array2=array2, func=gaussian, *argv, **argk)
+        
+    if array1 == None and array2 == None and Psi != None and tau1 != None:
+        Ti1, Ti2 = vectorsTi_fromPsi(Psi, tau1)
+
+    else:
+        raise IOError('vectorsTi take exactly (array1 and array2) or (Psi and tau)')
 
     return Ti1, Ti2
 
@@ -129,12 +202,24 @@ class Manet:
         self._T = None
         self._maxTi = None
         self._minTi = None
+        self._Psi = None
+        self._tau1 = np.append(np.ones(self.array1.shape[0]),np.zeros(self.array2.shape[0]))
+
+    def _computePsi(self):
+        self._Psi = getPsi(array1=self.array1, array2=self.array2, func=self.func, *self.argv, **self.argk):
 
     def _computeEnergyTest(self):
         print 'Computing Energy Test'
-        self._T1, self._T2 = vectorsTi(self.array1, self.array2, self.func, *self.argv, **self.argk)
+        self._T1, self._T2 = vectorsTi_fromArrays(array1=self.array1, array2=self.array2, func=self.func, *self.argv, **self.argk)
+        #self._T1, self._T2 = vectorsTi_fromArrays(Psi=self.Psi, tau1=self.tau1)
         self._T = self._T1.sum() + self._T2.sum()
 
+    @property    
+    def Psi(self):
+        if self._Psi == None:
+            self._computePsi()
+        return self._Psi
+        
     @property    
     def T1(self):
         if self._T == None:
