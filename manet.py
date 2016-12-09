@@ -7,6 +7,7 @@ To see example of usage try ./manet.py -h
 '''
 
 import numpy as np
+import time
 
 
 def gaussian(r2, sigma=0.2):
@@ -28,7 +29,7 @@ def eucliDistsSq(array1, array2):
 
 def getPsi(array1, array2, func=gaussian, *argv, **argk):
     '''
-    input: array1, array2, func=gaussian, *argv, **argk
+    Input: array1, array2, func=gaussian, *argv, **argk
     output: Big matrix with all the psi_ij distances with the func already applied
     for both the particles with particles, antiparticles with antiparticles and cross
     terms on the off-diagonals matrices, the diagonal is zero
@@ -39,9 +40,18 @@ def getPsi(array1, array2, func=gaussian, *argv, **argk):
     | psi n2 x n1 | psi n2 x n2 |  
     |             |             |
     '''
+    print 'Computing Psi'
+    t0 = time.time()
     arrayTot = np.concatenate([array1, array2])
-    Psi = func(eucliDistsSq(arrayTot, arrayTot), *argv, **argk)
+    # More direct method, for some reason much slower
+    # Psi = func(eucliDistsSq(arrayTot, arrayTot), *argv, **argk)
+    # Compute full matrix in steps
+    aa = func(eucliDistsSq(array1, array1), *argv, **argk)
+    bb = func(eucliDistsSq(array2, array2), *argv, **argk)
+    ab = func(eucliDistsSq(array1, array2), *argv, **argk)
+    Psi = np.concatenate([np.concatenate([aa,ab],axis=1), np.concatenate([ab.T,bb],axis=1)],axis=0)
     np.fill_diagonal(Psi, 0)
+    print 'Time taken to compute Psi is {0:.2f} seconds'.format(time.time()-t0)
     return Psi
 
 def vectorsTi_fromArrays(array1, array2, func=gaussian, *argv, **argk):
@@ -61,12 +71,8 @@ def vectorsTi_fromArrays(array1, array2, func=gaussian, *argv, **argk):
     # The first two sums
     time0 = time.time()
     matrDists = func(eucliDistsSq(array1, array1), *argv, **argk)
-    time1 = time.time()
     np.fill_diagonal(matrDists, 0) 
     Ti1 = matrDists.sum(1)/(2*n1*(n1-1))
-    time2 = time.time()
-    print time1-time0, time2-time1
-
     matrDists = func(eucliDistsSq(array2, array2), *argv, **argk)
     np.fill_diagonal(matrDists, 0) 
     Ti2 = matrDists.sum(1)/(2*n2*(n2-1)) 
@@ -87,7 +93,6 @@ def vectorsTi_fromPsi(Psi, tau1):
     See docstring of getPsi for more information.
     This should be faster for permutations.
     '''
-    Ti1, Ti2 = 0, 0
     n1 = tau1.sum()
     n2 = len(tau1)-n1
     
@@ -96,10 +101,10 @@ def vectorsTi_fromPsi(Psi, tau1):
     tau2 = 1-tau1
     
     # Compute Tis
-    Ti1 = np.tensordot((tau1/(2*n1*(n1-1)) + tau2/(2*n1*n2)),Psi,1)
-    Ti2 = np.tensordot(Psi,(tau2/(2*n2*(n2-1)) + tau1/(2*n1*n2)),1)
+    Ti1 = np.tensordot((tau1/(2*n1*(n1-1)) - tau2/(2*n1*n2)),Psi,1) * tau1
+    Ti2 = np.tensordot(Psi,(tau2/(2*n2*(n2-1)) - tau1/(2*n1*n2)),1) * tau2
     
-    return Ti1, Ti2
+    return Ti1[Ti1!=0], Ti2[Ti2!=0]
  
 
 def vectorsTi(array1=None, array2=None, Psi=None, tau1=None, func=gaussian, *argv, **argk):
@@ -119,10 +124,10 @@ def vectorsTi(array1=None, array2=None, Psi=None, tau1=None, func=gaussian, *arg
     This should be faster for permutations.
     '''
 
-    if array1 != None and array2 != None and Psi == None and tau1 == None:
+    if type(array1) != type(None) and type(array2) != type(None) and type(Psi) == type(None) and type(tau1) == type(None):
         Ti1, Ti2 = vectorsTi_fromArrays(array1=array1, array2=array2, func=gaussian, *argv, **argk)
         
-    if array1 == None and array2 == None and Psi != None and tau1 != None:
+    elif type(array1) == type(None) and type(array2) == type(None) and type(Psi) != type(None) and type(tau1) != type(None):
         Ti1, Ti2 = vectorsTi_fromPsi(Psi, tau1)
 
     else:
@@ -157,6 +162,26 @@ def getTandMinMaxTi(*argv, **argk):
     '''
     T1, T2 = vectorsTi(*argv, **argk)
     return (T1.sum() + T2.sum()), min(T1.min(), T2.min()), max(T1.max(), T2.max())
+
+# def getTandMinMaxTi_fromPsi(Psi, tau1):
+#     T1, T2 = vectorsTi_fromPsi(Psi, tau1)
+#     return (T1.sum() + T2.sum()), min(T1.min(), T2.min()), max(T1.max(), T2.max())
+
+
+def getTsPermutations(Psi, tau1, nperm=1):
+    '''
+    Takes as an input Psi (matrices with function already computed) and number of permutations
+    '''
+    Ts = []
+    for i in xrange(nperm):
+        print 'Computing permutation', i
+        t0 = time.time()
+        tau_perm = np.random.permutation(tau1)
+        T1, T2 = vectorsTi_fromPsi(Psi, tau_perm)
+        T = T1.sum() + T2.sum()
+        Ts.append([T, min(T1.min(), T2.min()), max(T1.max(), T2.max())])
+        print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0)
+    return Ts
 
 
 def permutation(array1, array2):
@@ -203,55 +228,71 @@ class Manet:
         self._maxTi = None
         self._minTi = None
         self._Psi = None
-        self._tau1 = np.append(np.ones(self.array1.shape[0]),np.zeros(self.array2.shape[0]))
+        self._tau1 = np.concatenate([np.ones(self.array1.shape[0]),np.zeros(self.array2.shape[0])])
+        self._Ts = None
 
     def _computePsi(self):
-        self._Psi = getPsi(array1=self.array1, array2=self.array2, func=self.func, *self.argv, **self.argk):
+        self._Psi = getPsi(array1=self.array1, array2=self.array2, func=self.func, *self.argv, **self.argk)
 
     def _computeEnergyTest(self):
         print 'Computing Energy Test'
-        self._T1, self._T2 = vectorsTi_fromArrays(array1=self.array1, array2=self.array2, func=self.func, *self.argv, **self.argk)
-        #self._T1, self._T2 = vectorsTi_fromArrays(Psi=self.Psi, tau1=self.tau1)
+        if type(self._Psi) == type(None):
+            self._T1, self._T2 = vectorsTi_fromArrays(array1=self.array1, array2=self.array2, func=self.func, *self.argv, **self.argk)
+        else:
+            self._T1, self._T2 = vectorsTi_fromPsi(Psi=self.Psi, tau1=self._tau1)
         self._T = self._T1.sum() + self._T2.sum()
 
     @property    
     def Psi(self):
-        if self._Psi == None:
+        if type(self._Psi) == type(None):
             self._computePsi()
         return self._Psi
         
     @property    
     def T1(self):
-        if self._T == None:
+        if type(self._T) == type(None):
            self._computeEnergyTest()
         return self._T1
 
     @property    
     def T2(self):
-        if self._T == None:
+        if type(self._T) == type(None):
             self._computeEnergyTest()
         return self._T2
 
     @property    
     def T(self):
-        if self._T == None:
+        if type(self._T) == type(None):
             self._computeEnergyTest()
         return self._T
 
     @property
     def maxTi(self):
-        if self._maxTi == None:
+        if type(self._maxTi) == type(None):
             self._maxTi = max(self.T1.max(), self.T2.max())
         return self._maxTi
 
     @property
     def minTi(self):
-        if self._minTi == None:
+        if np.tensordot(self._minTi) == np.tensordot(None):
             self._minTi = min(self.T1.min(), self.T2.min())
         return self._minTi
 
     def writeTis(self, outFile_name='Tis.txt'):
         writeTis(array1=self.array1, array2=self.array2, T1=self.T1, T2=self.T2, outFile_name=outFile_name)
+
+
+    def Ts(self, nperm):
+        if nperm == 0:
+            return []
+        if self._Ts == None:
+            self._Ts = getTsPermutations(Psi=self.Psi, tau1=self._tau1, nperm=nperm)
+            return self._Ts
+        elif len(self._Ts) > nperm:
+            return self._Ts[:nperm]
+        elif len(self._Ts) < nperm:
+            self._Ts.append(getTsPermutations(Psi=self.Psi, tau1=self._tau1, nperm=nperm-len(self._Ts)))
+            return self._Ts
 
         
 if __name__ == '__main__':
@@ -267,6 +308,7 @@ if __name__ == '__main__':
     parser.add_argument('-p','--nperm',help='define number of permutations to run', default=0, type=int)
     parser.add_argument('-r','--seed',help='specify a seed for the random number generator', default=0, type=int)
     parser.add_argument('-d',help='skip the default T calculation (used when just adding permutations as a separate job)',action='store_true')
+    parser.add_argument('--slow',help='do not store matrix dstances in memory but recompute it every time',action='store_true')
     parser.add_argument('-o','--outfile',help='output file name, do not specify the estension as it will create a Tis.txt and a Ts.txt', default='')
     args = parser.parse_args()
     ##########################
@@ -281,24 +323,28 @@ if __name__ == '__main__':
         sample1 = sample1[:args.nevts]
         sample2 = sample2[:args.nevts]
 
-    import time
-
+    et=Manet(sample1, sample2, sigma=args.sigma)
+    
     if not args.d:
         t0 = time.time()
-        et=Manet(sample1, sample2, sigma=args.sigma)
         outTis_name = args.outfile+'.Tis.txt' if args.outfile else 'Tis.txt'
+        if not args.slow and args.nperm:
+            et.Psi # Compute Psi so speed up permutations later
         et.writeTis(outTis_name)
         print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(et.T, time.time()-t0)
 
     # Run permutations
-    Ts = []
-    for i in xrange(args.nperm):
-        print 'Computing permutation', i
-        t0 = time.time()
-        a, b = permutation(sample1, sample2)
-        T, minTi, maxTi = getTandMinMaxTi(a, b, sigma=args.sigma)
-        Ts.append([T, minTi, maxTi])
-        print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0)
+    if args.slow:
+        Ts = []
+        for i in xrange(args.nperm):
+            print 'Computing permutation', i
+            t0 = time.time()
+            a, b = permutation(sample1, sample2)
+            T, minTi, maxTi = getTandMinMaxTi(a, b, sigma=args.sigma)
+            Ts.append([T, minTi, maxTi])
+            print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0)
+    else:
+        Ts = et.Ts(args.nperm)
       
     header = '' if args.d else '{0:.5e}'.format(et.T)
     outTs_name = args.outfile+'.Ts.txt' if args.outfile else 'Ts.txt'
