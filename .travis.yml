@@ -5,11 +5,10 @@ install:
   # Install Manet dependencies
   - pip install -r requirements.txt
   # Install test dependencies
-  - pip install pytest
+  - pip install pytest pytest-travis-fold
 # Run flake8, a Python code linter 
 # before_script:
 #  flake8 manet
 # Run the test suite
-script:
-  - pytest
+script: pytest
 
