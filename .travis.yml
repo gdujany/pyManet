@@ -10,5 +10,5 @@ install:
 # before_script:
 #  flake8 manet
 # Run the test suite
-script: pytest
+script: py.test
 
