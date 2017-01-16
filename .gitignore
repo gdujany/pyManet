@@ -66,3 +66,7 @@ nosetests.xml
 .mr.developer.cfg
 .project
 .pydevproject
+
+# cernbox
+*.DS_Store
+*.cache
