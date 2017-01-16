@@ -450,7 +450,7 @@ if __name__ == '__main__':
     parser.add_argument('-s','--sigma',help='specify the sigma parameter of the Gaussian metric', default=10.0, type=float)
     parser.add_argument('-e','--signals',help='''Number of signal events in first and second sample (s1, s2), 
     it is needed if background files are provided''', type=int, nargs=2)
-    parser.add_argument('-n','--nevts',help='limit number of events in each sample to number given', type=int)
+    parser.add_argument('-n','--nevts',help='limit number of events in each sample to number given', type=float)
     parser.add_argument('-p','--nperm',help='define number of permutations to run', default=0, type=int)
     parser.add_argument('-r','--seed',help='specify a seed for the random number generator', default=0, type=int)
     parser.add_argument('-d',help='skip the default T calculation (used when just adding permutations as a separate job)',action='store_true')

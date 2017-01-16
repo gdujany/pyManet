@@ -1,7 +1,7 @@
 '''
 Tests for manet
 
-Run from manet's root folder with "pytest"
+Run from manet's root folder with "py.test"
 '''
 
 import os, sys
