@@ -501,7 +501,7 @@ if __name__ == '__main__':
             if args.filesbackground:  
                 #also permute background.
                 c, d = permutation(bkgsample1,bkgsample2)
-                signalsize = (args.purity1 + args.purity2)
+                signalsize = (args.signals[0] + args.signals[1])
                 perm1size = a.shape[0]
                 perm2size = b.shape[0]
             
