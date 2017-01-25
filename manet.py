@@ -10,11 +10,11 @@ import numpy as np
 import time
 
 
-def gaussian(r2, sigma=10.0):
+def gaussian(r2, sigma=10.0, mathLib=np):
     '''
     N.B. the first argument is not the distance but already its square!
     '''
-    tmp = np.exp(- 0.5 * r2 / sigma**2)
+    tmp = mathLib.exp(- 0.5 * r2 / sigma**2)
     # Set to zero in case distance is exactly zero
     tmp[tmp==1] = 0
     return tmp
@@ -116,18 +116,22 @@ def vectorsTi_fromArrays(array1, array2, background1=None, background2=None, pur
         w1, w2 = purity1, purity2
     else:
         w1, w2 = n1, n2
-    
+
+    import dask.array as da
+    array1 = da.from_array(array1, 1000)
+    array2 = da.from_array(array2, 1000)
+        
     # The first two sums
     time0 = time.time()
-    matrDists = func(eucliDistsSq(array1, array1), *argv, **argk)
-    np.fill_diagonal(matrDists, 0) 
+    matrDists = func(eucliDistsSq(array1, array1), mathLib=da, *argv, **argk)
+    #np.fill_diagonal(matrDists, 0) 
     Ti1 = matrDists.sum(1)/(2*w1*(w1-1))  #signal-signal component
-    matrDists = func(eucliDistsSq(array2, array2), *argv, **argk)
-    np.fill_diagonal(matrDists, 0) 
+    matrDists = func(eucliDistsSq(array2, array2), mathLib=da, *argv, **argk)
+    #np.fill_diagonal(matrDists, 0) 
     Ti2 = matrDists.sum(1)/(2*w2*(w2-1))  #signal-signal component
     
     # and the mixed term
-    matrDists = func(eucliDistsSq(array1, array2), *argv, **argk)
+    matrDists = func(eucliDistsSq(array1, array2), mathLib=da, *argv, **argk)
     Ti1 -= matrDists.sum(1)/(2*w1*w2)
     Ti2 -= matrDists.sum(0)/(2*w1*w2)
 
@@ -139,32 +143,35 @@ def vectorsTi_fromArrays(array1, array2, background1=None, background2=None, pur
         bg1 = n1-w1
         bg2 = n2-w2
 
+        background1 = da.from_array(background1, 1000)
+        background2 = da.from_array(background2, 1000)
+
         # The contribution of the background to first two sums
-        matrDists = func(eucliDistsSq(array1, background1), *argv, **argk)
+        matrDists = func(eucliDistsSq(array1, background1), mathLib=da, *argv, **argk)
         Ti1 -= (bg1/b1)*(matrDists.sum(1)/(w1*(w1-1))) #subtract off the background-signal component in first term #note loss of 2 in denominator
-        matrDists = func(eucliDistsSq(array2, background2), *argv, **argk)
+        matrDists = func(eucliDistsSq(array2, background2), mathLib=da, *argv, **argk)
         Ti2 -= (bg2/b2)*matrDists.sum(1)/(w2*(w2-1)) #subtract off the background-signal component in first term #note loss of 2 in denominator
 
         # and contribution of the background the mixed term
-        matrDists = func(eucliDistsSq(array1, background2), *argv, **argk)
+        matrDists = func(eucliDistsSq(array1, background2), mathLib=da, *argv, **argk)
         Ti1 += (bg2/b2)*matrDists.sum(1)/(w1*w2)
-        matrDists = func(eucliDistsSq(background1, array2), *argv, **argk)
+        matrDists = func(eucliDistsSq(background1, array2), mathLib=da, *argv, **argk)
         Ti2 += (bg1/b1)*matrDists.sum(0)/(w1*w2)
     
         #but we've now double counted, and removed the background-background term twice
-        matrDists = func(eucliDistsSq(background1, background1), *argv, **argk)
+        matrDists = func(eucliDistsSq(background1, background1), mathLib=da, *argv, **argk)
         np.fill_diagonal(matrDists, 0) 
         Tib1 =  ((bg1*bg1+bg1)/(b1*(b1-1)))* matrDists.sum(1)/(2*w1*(w1-1))
-        matrDists = func(eucliDistsSq(background2, background2), *argv, **argk)
+        matrDists = func(eucliDistsSq(background2, background2), mathLib=da, *argv, **argk)
         np.fill_diagonal(matrDists, 0) 
         Tib2 =  ((bg2*bg2+bg2)/(b2*(b2-1)))* matrDists.sum(1)/(2*w2*(w2-1))
-        matrDists = func(eucliDistsSq(background1, background2), *argv, **argk)
+        matrDists = func(eucliDistsSq(background1, background2), mathLib=da, *argv, **argk)
         Tib1 -= (bg1/b1)*(bg2/b2)*matrDists.sum(1)/(2*w1*w2)
         Tib2 -= (bg1/b1)*(bg2/b2)*matrDists.sum(0)/(2*w1*w2)
         
-        return Ti1, Ti2, Tib1, Tib2
+        return Ti1.compute(), Ti2.compute(), Tib1.compute(), Tib2.compute()
 
-    return Ti1, Ti2
+    return Ti1.compute(), Ti2.compute()
 
 
 def vectorsTi_fromPsi(Psi, tau1, btau1=None, purity1=None, purity2=None):
@@ -234,7 +241,7 @@ def vectorsTi(array1=None, array2=None, background1 = None, background2 = None, 
     See docstring of getPsi for more information.
     This should be faster for permutations.
     '''
-
+    
     if (type(array1) != type(None) and type(array2) != type(None)) and (type(Psi) == type(None) and type(tau1) == type(None)):
         return vectorsTi_fromArrays(array1=array1, array2=array2, background1=background1, background2 = background2, purity1=purity1, purity2=purity2, func=gaussian, *argv, **argk)
         
