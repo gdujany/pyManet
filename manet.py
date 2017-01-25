@@ -6,6 +6,7 @@ python version based on numpy
 To see example of usage try ./manet.py -h
 '''
 
+from __future__ import print_function, division
 import numpy as np
 import time
 
@@ -68,7 +69,7 @@ def getPsi(array1, array2, background1=None, background2=None, func=gaussian, *a
     where b1 and b2 are the number of events in the two background samples
     
     '''
-    print 'Computing Psi'
+    print('Computing Psi')
     t0 = time.time()
     # arrayTot = np.concatenate([array1, array2])
     # More direct method, for some reason much slower
@@ -90,7 +91,7 @@ def getPsi(array1, array2, background1=None, background2=None, func=gaussian, *a
     else:
         Psi = np.concatenate([np.concatenate([aa,ab],axis=1), np.concatenate([ab.T,bb],axis=1)],axis=0)
     np.fill_diagonal(Psi, 0)
-    print 'Time taken to compute Psi is {0:.2f} seconds'.format(time.time()-t0)
+    print('Time taken to compute Psi is {0:.2f} seconds'.format(time.time()-t0))
     return Psi
 
 
@@ -299,7 +300,7 @@ def getTsPermutations(Psi, tau1, btau1=None, overallpurity=None, nperm=1):
     '''
     Ts = []
     for i in xrange(nperm):
-        print 'Computing permutation', i
+        print('Computing permutation', i)
         t0 = time.time()
         tau_perm = np.random.permutation(tau1)
         btau_perm = np.random.permutation(btau1) if type(btau1)!=type(None) else None
@@ -317,7 +318,7 @@ def getTsPermutations(Psi, tau1, btau1=None, overallpurity=None, nperm=1):
         Tis = vectorsTi_fromPsi(Psi, tau_perm, btau_perm, newpurity1, newpurity2)
         T = sum([Ti.sum() for Ti in Tis])
         Ts.append([T, min(Tis[0].min(), Tis[1].min()), max(Tis[0].max(), Tis[1].max())])
-        print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0)
+        print('T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0))
     return Ts
 
 
@@ -384,7 +385,7 @@ class Manet:
 
         
     def _computeEnergyTest(self):
-        print 'Computing Energy Test'
+        print('Computing Energy Test')
         if type(self._Psi) == type(None):
             Tis  = vectorsTi_fromArrays(array1=self.array1, array2=self.array2, background1=self.background1, background2 = self.background2, purity1=self.purity1, purity2=self.purity2, func=self.func, bigData=self.bigData, *self.argv, **self.argk)
         else:
@@ -483,7 +484,7 @@ if __name__ == '__main__':
     ##########################
 
     # set seed
-    print 'Using random number seed', args.seed
+    print('Using random number seed', args.seed)
     np.random.seed(args.seed)
 
     # read input datasets
@@ -511,13 +512,13 @@ if __name__ == '__main__':
         if not args.slow and args.nperm:
             et.Psi # Compute Psi so speed up permutations later
         et.writeTis(outTis_name)
-        print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(et.T, time.time()-t0)
+        print('T = {0:.5e}, time taken {1:.2f} seconds'.format(et.T, time.time()-t0))
 
     # Run permutations
     if args.slow:
         Ts = []
         for i in xrange(args.nperm):
-            print 'Computing permutation', i
+            print('Computing permutation', i)
             t0 = time.time()
             a, b = permutation(sample1, sample2)
 
@@ -534,7 +535,7 @@ if __name__ == '__main__':
                 c, d, newpurity1, newpurity2 = [None]*4
             T, minTi, maxTi = getTandMinMaxTi(a, b, c, d, purity1=newpurity1, purity2=newpurity2, sigma=args.sigma, bigData=args.bigData)
             Ts.append([T, minTi, maxTi])
-            print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0)
+            print('T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0))
     else:
         overallsamplepurity = sum(args.signals) if args.filesbackground else None
         Ts = et.Ts(overallpurity = overallsamplepurity, nperm = args.nperm)
