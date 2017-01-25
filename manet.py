@@ -160,10 +160,10 @@ def vectorsTi_fromArrays(array1, array2, background1=None, background2=None, pur
     
         #but we've now double counted, and removed the background-background term twice
         matrDists = func(eucliDistsSq(background1, background1), mathLib=da, *argv, **argk)
-        np.fill_diagonal(matrDists, 0) 
+        #np.fill_diagonal(matrDists, 0) 
         Tib1 =  ((bg1*bg1+bg1)/(b1*(b1-1)))* matrDists.sum(1)/(2*w1*(w1-1))
         matrDists = func(eucliDistsSq(background2, background2), mathLib=da, *argv, **argk)
-        np.fill_diagonal(matrDists, 0) 
+        #np.fill_diagonal(matrDists, 0) 
         Tib2 =  ((bg2*bg2+bg2)/(b2*(b2-1)))* matrDists.sum(1)/(2*w2*(w2-1))
         matrDists = func(eucliDistsSq(background1, background2), mathLib=da, *argv, **argk)
         Tib1 -= (bg1/b1)*(bg2/b2)*matrDists.sum(1)/(2*w1*w2)
