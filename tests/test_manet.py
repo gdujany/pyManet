@@ -25,9 +25,12 @@ def test_Tis_fromPsi():
 
 def test_Tis_fromArrays():
     for Ti1, Ti2 in zip(dd['Tis'], vectorsTi_fromArrays(dd['array1'], dd['array2'])):
-        assert (Ti1-Ti2<1e-10).all() 
-        
+        assert (Ti1-Ti2<1e-10).all()
 
+def test_Tis_fromArrays_bigData():
+    for Ti1, Ti2 in zip(dd['Tis'], vectorsTi_fromArrays(dd['array1'], dd['array2'], bigData=True)):
+        assert (Ti1-Ti2<1e-10).all() 
+    
 def test_Tis_fromPsi_bkg():
     for Ti1, Ti2 in zip(dd['Tis_bkg'], vectorsTi_fromPsi(dd['Psi_bkg'], dd['tau1'], dd['btau1'], dd['purity1'], dd['purity2'])):
         assert (Ti1-Ti2<1e-10).all() 

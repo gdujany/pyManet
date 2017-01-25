@@ -94,7 +94,7 @@ def getPsi(array1, array2, background1=None, background2=None, func=gaussian, *a
     return Psi
 
 
-def vectorsTi_fromArrays(array1, array2, background1=None, background2=None, purity1=None, purity2=None, func=gaussian, *argv, **argk):
+def vectorsTi_fromArrays(array1, array2, background1=None, background2=None, purity1=None, purity2=None, bigData=False, func=gaussian, *argv, **argk):
     '''
     input: array1, array2,  background1, background2, purity1, purity2, func=gaussian, *argv, **argk
     output T1, T2, Tb1, Tb2 (arrays of Tis)
@@ -105,6 +105,7 @@ def vectorsTi_fromArrays(array1, array2, background1=None, background2=None, pur
     argv and argk are passed to func
     if given background1 and background2 are the arrays with the background samples
     and purity1 and purity2 are the number of signal events in the array1 and array2 (absolute number, not ratio to total)
+    If bigData is true use Dask to avoid to fill the RAM
     '''
     Ti1, Ti2 = 0,0
     n1 = 1.0*array1.shape[0]
@@ -117,21 +118,25 @@ def vectorsTi_fromArrays(array1, array2, background1=None, background2=None, pur
     else:
         w1, w2 = n1, n2
 
-    import dask.array as da
-    array1 = da.from_array(array1, 1000)
-    array2 = da.from_array(array2, 1000)
+    if bigData:
+        import dask.array as da
+        array1 = da.from_array(array1, 1000)
+        array2 = da.from_array(array2, 1000)
+        mathLib = da
+    else:
+        mathLib = np
         
     # The first two sums
     time0 = time.time()
-    matrDists = func(eucliDistsSq(array1, array1), mathLib=da, *argv, **argk)
+    matrDists = func(eucliDistsSq(array1, array1), mathLib=mathLib, *argv, **argk)
     #np.fill_diagonal(matrDists, 0) 
     Ti1 = matrDists.sum(1)/(2*w1*(w1-1))  #signal-signal component
-    matrDists = func(eucliDistsSq(array2, array2), mathLib=da, *argv, **argk)
+    matrDists = func(eucliDistsSq(array2, array2), mathLib=mathLib, *argv, **argk)
     #np.fill_diagonal(matrDists, 0) 
     Ti2 = matrDists.sum(1)/(2*w2*(w2-1))  #signal-signal component
     
     # and the mixed term
-    matrDists = func(eucliDistsSq(array1, array2), mathLib=da, *argv, **argk)
+    matrDists = func(eucliDistsSq(array1, array2), mathLib=mathLib, *argv, **argk)
     Ti1 -= matrDists.sum(1)/(2*w1*w2)
     Ti2 -= matrDists.sum(0)/(2*w1*w2)
 
@@ -142,37 +147,42 @@ def vectorsTi_fromArrays(array1, array2, background1=None, background2=None, pur
         b2 = background2.shape[0]
         bg1 = n1-w1
         bg2 = n2-w2
-
-        background1 = da.from_array(background1, 1000)
-        background2 = da.from_array(background2, 1000)
+        if bigData:
+            background1 = da.from_array(background1, 1000)
+            background2 = da.from_array(background2, 1000)
 
         # The contribution of the background to first two sums
-        matrDists = func(eucliDistsSq(array1, background1), mathLib=da, *argv, **argk)
+        matrDists = func(eucliDistsSq(array1, background1), mathLib=mathLib, *argv, **argk)
         Ti1 -= (bg1/b1)*(matrDists.sum(1)/(w1*(w1-1))) #subtract off the background-signal component in first term #note loss of 2 in denominator
-        matrDists = func(eucliDistsSq(array2, background2), mathLib=da, *argv, **argk)
+        matrDists = func(eucliDistsSq(array2, background2), mathLib=mathLib, *argv, **argk)
         Ti2 -= (bg2/b2)*matrDists.sum(1)/(w2*(w2-1)) #subtract off the background-signal component in first term #note loss of 2 in denominator
 
         # and contribution of the background the mixed term
-        matrDists = func(eucliDistsSq(array1, background2), mathLib=da, *argv, **argk)
+        matrDists = func(eucliDistsSq(array1, background2), mathLib=mathLib, *argv, **argk)
         Ti1 += (bg2/b2)*matrDists.sum(1)/(w1*w2)
-        matrDists = func(eucliDistsSq(background1, array2), mathLib=da, *argv, **argk)
+        matrDists = func(eucliDistsSq(background1, array2), mathLib=mathLib, *argv, **argk)
         Ti2 += (bg1/b1)*matrDists.sum(0)/(w1*w2)
     
         #but we've now double counted, and removed the background-background term twice
-        matrDists = func(eucliDistsSq(background1, background1), mathLib=da, *argv, **argk)
+        matrDists = func(eucliDistsSq(background1, background1), mathLib=mathLib, *argv, **argk)
         #np.fill_diagonal(matrDists, 0) 
         Tib1 =  ((bg1*bg1+bg1)/(b1*(b1-1)))* matrDists.sum(1)/(2*w1*(w1-1))
-        matrDists = func(eucliDistsSq(background2, background2), mathLib=da, *argv, **argk)
+        matrDists = func(eucliDistsSq(background2, background2), mathLib=mathLib, *argv, **argk)
         #np.fill_diagonal(matrDists, 0) 
         Tib2 =  ((bg2*bg2+bg2)/(b2*(b2-1)))* matrDists.sum(1)/(2*w2*(w2-1))
-        matrDists = func(eucliDistsSq(background1, background2), mathLib=da, *argv, **argk)
+        matrDists = func(eucliDistsSq(background1, background2), mathLib=mathLib, *argv, **argk)
         Tib1 -= (bg1/b1)*(bg2/b2)*matrDists.sum(1)/(2*w1*w2)
         Tib2 -= (bg1/b1)*(bg2/b2)*matrDists.sum(0)/(2*w1*w2)
-        
-        return Ti1.compute(), Ti2.compute(), Tib1.compute(), Tib2.compute()
 
-    return Ti1.compute(), Ti2.compute()
+        if bigData:
+            return Ti1.compute(), Ti2.compute(), Tib1.compute(), Tib2.compute()
+        else:
+            return Ti1, Ti2, Tib1, Tib2
 
+    if bigData:
+        return Ti1.compute(), Ti2.compute()
+    else:
+        return Ti1, Ti2
 
 def vectorsTi_fromPsi(Psi, tau1, btau1=None, purity1=None, purity2=None):
     '''
@@ -225,7 +235,7 @@ def vectorsTi_fromPsi(Psi, tau1, btau1=None, purity1=None, purity2=None):
         return Ti1[Ti1!=0], Ti2[Ti2!=0]
 
     
-def vectorsTi(array1=None, array2=None, background1 = None, background2 = None, Psi=None, tau1=None, btau1 = None, purity1=None, purity2=None, func=gaussian, *argv, **argk):
+def vectorsTi(array1=None, array2=None, background1 = None, background2 = None, Psi=None, tau1=None, btau1 = None, purity1=None, purity2=None, func=gaussian, bigData = False, *argv, **argk):
     '''
     input: array1, array2, func=gaussian, *argv, **argk
     output T1, T2 (arrays of Tis)
@@ -243,9 +253,11 @@ def vectorsTi(array1=None, array2=None, background1 = None, background2 = None, 
     '''
     
     if (type(array1) != type(None) and type(array2) != type(None)) and (type(Psi) == type(None) and type(tau1) == type(None)):
-        return vectorsTi_fromArrays(array1=array1, array2=array2, background1=background1, background2 = background2, purity1=purity1, purity2=purity2, func=gaussian, *argv, **argk)
+        return vectorsTi_fromArrays(array1=array1, array2=array2, background1=background1, background2 = background2, purity1=purity1, purity2=purity2, func=gaussian, bigData=bigData, *argv, **argk)
         
     elif (type(array1) == type(None) and type(array2) == type(None)) and (type(Psi) != type(None) and type(tau1) != type(None)):
+        if bigData:
+            raise IOError('If your dataset is large do not compute Psi')
         return vectorsTi_fromPsi(Psi, tau1, btau1, purity1, purity2)
 
     else:
@@ -341,7 +353,7 @@ class Manet:
     but once it computes the energy test once it stores the result
     so one can call the various quantities without redoing it
     '''
-    def __init__(self, array1, array2, background1=None, background2=None, func=gaussian, purity1=None, purity2=None, *argv, **argk):
+    def __init__(self, array1, array2, background1=None, background2=None, func=gaussian, purity1=None, purity2=None, bigData=False, *argv, **argk):
         self.array1 = array1
         self.array2 = array2
         self.background1 = background1
@@ -349,6 +361,7 @@ class Manet:
         self.purity1 = purity1
         self.purity2 = purity2
         self.func = func
+        self.bigData = bigData
         self.argv = argv
         self.argk = argk
         self._T1 = None
@@ -373,7 +386,7 @@ class Manet:
     def _computeEnergyTest(self):
         print 'Computing Energy Test'
         if type(self._Psi) == type(None):
-            Tis  = vectorsTi_fromArrays(array1=self.array1, array2=self.array2, background1=self.background1, background2 = self.background2, purity1=self.purity1, purity2=self.purity2, func=self.func, *self.argv, **self.argk)
+            Tis  = vectorsTi_fromArrays(array1=self.array1, array2=self.array2, background1=self.background1, background2 = self.background2, purity1=self.purity1, purity2=self.purity2, func=self.func, bigData=self.bigData, *self.argv, **self.argk)
         else:
             Tis = vectorsTi_fromPsi(Psi=self.Psi, tau1=self._tau1,btau1=self._btau1, purity1 = self.purity1, purity2 = self.purity2)
         self._T = sum([Ti.sum() for Ti in Tis]) 
@@ -462,8 +475,11 @@ if __name__ == '__main__':
     parser.add_argument('-r','--seed',help='specify a seed for the random number generator', default=0, type=int)
     parser.add_argument('-d',help='skip the default T calculation (used when just adding permutations as a separate job)',action='store_true')
     parser.add_argument('--slow',help='do not store matrix dstances in memory but recompute it every time',action='store_true')
+    parser.add_argument('--bigData',help='Use Dask to avoid filling up the RAM, option slow is implicit',action='store_true')
     parser.add_argument('-o','--outfile',help='output file name, do not specify the estension as it will create a Tis.txt and a Ts.txt', default='')
     args = parser.parse_args()
+    if args.bigData:
+        args.slow = True
     ##########################
 
     # set seed
@@ -487,7 +503,7 @@ if __name__ == '__main__':
     else:
         bkgsample1, bkgsample2, purity1, purity2 = [None]*4
         
-    et=Manet(sample1, sample2, bkgsample1, bkgsample2, purity1=purity1 ,purity2=purity2, sigma=args.sigma)
+    et=Manet(sample1, sample2, bkgsample1, bkgsample2, purity1=purity1 ,purity2=purity2, sigma=args.sigma, bigData=args.bigData)
     
     if not args.d:
         t0 = time.time()
@@ -516,7 +532,7 @@ if __name__ == '__main__':
                 newpurity2 = 1.0*signalsize * ((1.0*perm2size)/(1.0*(perm1size+perm2size)))
             else:
                 c, d, newpurity1, newpurity2 = [None]*4
-            T, minTi, maxTi = getTandMinMaxTi(a, b, c, d, purity1=newpurity1, purity2=newpurity2, sigma=args.sigma)
+            T, minTi, maxTi = getTandMinMaxTi(a, b, c, d, purity1=newpurity1, purity2=newpurity2, sigma=args.sigma, bigData=args.bigData)
             Ts.append([T, minTi, maxTi])
             print 'T = {0:.5e}, time taken {1:.2f} seconds'.format(T, time.time()-t0)
     else:
