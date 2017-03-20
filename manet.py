@@ -209,13 +209,13 @@ def vectorsTi_fromPsi(Psi, tau1, btau1=None, purity1=None, purity2=None):
         Ti2 = np.tensordot(Psi,(ttau2/(2*w2*(w2-1)) - ttau1/(2*w1*w2) - (bg2/b2)* tbtau2/(w2*(w2-1)) +(bg1/b1)*tbtau1/(w1*w2))    ,1) * ttau2
         Tib1 = np.tensordot( ((bg1+1)/(b1-1))*(bg1/b1)*tbtau1/(2*w1*(w1-1)) - (bg1/b1)*(bg2/b2)*tbtau2/(2*w1*w2),Psi,1)*tbtau1
         Tib2 = np.tensordot(Psi, ((bg2+1)/(b2-1))*(bg2/b2)*tbtau2/(2*w2*(w2-1)) - (bg1/b1)*(bg2/b2)*tbtau1/(2*w1*w2),1)*tbtau2
-        return Ti1[Ti1!=0], Ti2[Ti2!=0], Tib1[Tib1!=0], Tib2[Tib2!=0]
+        return Ti1[tau1!=0], Ti2[tau2!=0], Tib1[tbtau1!=0], Tib2[tbtau2!=0]
 
     else: # Case with no background
         # Compute Tis
         Ti1 = np.tensordot((tau1/(2*n1*(n1-1)) - tau2/(2*n1*n2)),Psi,1) * tau1
         Ti2 = np.tensordot(Psi,(tau2/(2*n2*(n2-1)) - tau1/(2*n1*n2)),1) * tau2
-        return Ti1[Ti1!=0], Ti2[Ti2!=0]
+        return Ti1[tau1!=0], Ti2[tau2!=0]
 
     
 def vectorsTi(array1=None, array2=None, background1 = None, background2 = None, Psi=None, tau1=None, btau1 = None, purity1=None, purity2=None, func=gaussian, *argv, **argk):
